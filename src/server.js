@@ -1,57 +1,66 @@
+'use strict';
+
 const express = require('express');
 const { CheckoutService } = require('./services/CheckoutService');
+const { ValidationError } = require('./errors');
+const { GatewayStatus } = require('./domain/OrderStatus');
 
 const app = express();
 app.use(express.json());
 
-// Mocks simulados de infraestrutura para o servidor rodar localmente antes do Toxiproxy
+// Mocks de infraestrutura para rodar localmente antes do Toxiproxy (Fase 4).
 const gatewayPagamentoMock = {
-  cobrar: async (valor) => {
-    // Simula o tempo de resposta padrão de uma API de terceiros (I/O Bound)
-    return new Promise(resolve => setTimeout(() => resolve({ status: 'APROVADO' }), 300));
-  }
+  cobrar: async () => new Promise((resolve) =>
+    setTimeout(() => resolve({ status: GatewayStatus.APPROVED }), 300)),
 };
 
 const pedidoRepositoryMock = {
-  salvar: async (pedido) => {
-    // Simula a escrita no banco de dados
-    return { ...pedido, id: Math.floor(Math.random() * 10000) };
-  }
+  salvar: async (pedido) => ({ ...pedido, id: Math.floor(Math.random() * 10000) }),
 };
 
 const emailServiceMock = {
-  enviarConfirmacao: async (email, msg) => console.log(`E-mail enviado para ${email}`)
+  enviarConfirmacao: async (email) => console.log(`E-mail enviado para ${email}`),
 };
 
-// Instanciação do serviço legado
-const checkoutService = new CheckoutService(gatewayPagamentoMock, pedidoRepositoryMock, emailServiceMock);
+const checkoutService = new CheckoutService(
+  gatewayPagamentoMock,
+  pedidoRepositoryMock,
+  emailServiceMock,
+);
 
-// ENDPOINT CRÍTICO: Rota que receberá a carga massiva da Black Friday
+// ENDPOINT CRITICO: rota que recebera a carga massiva da Black Friday.
 app.post('/api/v1/checkout', async (req, res) => {
   const { clienteEmail, valor, cartao } = req.body;
-  
-  if (!clienteEmail || !valor || !cartao) {
-    return res.status(400).json({ erro: 'Dados incompletos para checkout' });
-  }
-
   const pedido = { clienteEmail, valor, cartao, status: 'PENDENTE' };
-  
-  // Executa o checkout
-  const resultado = await checkoutService.processar(pedido);
 
-  if (resultado && resultado.status === 'PROCESSADO') {
-    return res.status(200).json({ mensagem: 'Pedido finalizado com sucesso!', pedido: resultado });
+  try {
+    const resultado = await checkoutService.processar(pedido);
+
+    if (resultado.success) {
+      return res.status(200).json({ mensagem: 'Pedido finalizado com sucesso!', pedido: resultado.order });
+    }
+    // RN03 / RN07: recusa de negocio ou fallback de infraestrutura.
+    return res.status(500).json({ erro: 'Nao foi possivel processar seu pagamento. Tente mais tarde.', motivo: resultado.reason });
+  } catch (error) {
+    if (error instanceof ValidationError) {
+      // RN01: aborta antes de tocar gateway/banco.
+      return res.status(400).json({ erro: 'Dados incompletos para checkout', campo: error.field });
+    }
+    // Rede de seguranca: nunca deixa uma excecao nao tratada derrubar o Node.
+    console.error('Erro inesperado no checkout:', error.message);
+    return res.status(500).json({ erro: 'Erro interno inesperado.' });
   }
-  
-  return res.status(500).json({ erro: 'Não foi possível processar seu pagamento. Tente mais tarde.' });
 });
 
-// Endpoint auxiliar para simular o comportamento de Thundering Herd (Manada Estourada)
-// Útil para limpar o cache de sessões/cupons de desconto de forma abrupta sob carga
+// Endpoint auxiliar para simular Thundering Herd (Fase 4).
 app.post('/api/v1/cache/flush', (req, res) => {
-  console.log("💥 CACHE LIMPO ABRUPTAMENTE!");
+  console.log('CACHE LIMPO ABRUPTAMENTE!');
   res.json({ status: 'cache_invalidated' });
 });
 
 const PORT = 3000;
-app.listen(PORT, () => console.log(`🚀 Servidor da EntregasJá rodando na porta ${PORT}`));
+if (require.main === module) {
+  app.listen(PORT, () => console.log(`Servidor da EntregasJa rodando na porta ${PORT}`));
+}
+
+module.exports = { app };
