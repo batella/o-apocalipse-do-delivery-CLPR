@@ -1,8 +1,10 @@
 # O Apocalipse do Delivery
 
 Intrgrantes
-* Aluno 1
-* Aluno 2
+* Caio Batella
+* Lucas de Carvalho
+* Pedro Silva
+* Rodrigo Diniz
 
 
 Como as Fases se Conectam a este Código
