@@ -127,6 +127,44 @@ describe('CheckoutService — Fluxo 4: Caos Total / Fallback (RN07)', () => {
       expect.objectContaining({ status: OrderStatus.GATEWAY_ERROR }),
     );
   });
+
+  test('o motivo da rejeicao por infra carrega o nome do erro (nao vazio)', async () => {
+    const repo = novoPedidoRepositoryStub();
+    const service = new CheckoutService(gatewayFalhaStub, repo, { enviarConfirmacao: jest.fn() }, { retryOptions: fastRetry });
+    const resultado = await service.processar(PedidoMother.altoValor());
+    expect(resultado.reason).toBe('InfrastructureError');
+    expect(resultado.reason.length).toBeGreaterThan(0);
+  });
+
+  test('o motivo da recusa de negocio e "pagamento_recusado"', async () => {
+    const repo = novoPedidoRepositoryStub();
+    const service = new CheckoutService(gatewayRecusaStub, repo, { enviarConfirmacao: jest.fn() }, { retryOptions: fastRetry });
+    const resultado = await service.processar(PedidoMother.recusavel());
+    expect(resultado.reason).toBe('pagamento_recusado');
+  });
+});
+
+describe('CheckoutService — defaults do construtor', () => {
+  test('aplica timeout de 2000ms e 3 retries quando nenhuma opcao e passada', () => {
+    const service = new CheckoutService(gatewayAprovaStub, novoPedidoRepositoryStub(), { enviarConfirmacao: jest.fn() });
+    expect(service.timeoutMs).toBe(2000);
+    expect(service.retryOptions).toEqual({ maxRetries: 3, backoffMs: 500, jitter: 0.2 });
+  });
+
+  test('cria um validador e um circuit breaker padrao', () => {
+    const service = new CheckoutService(gatewayAprovaStub, novoPedidoRepositoryStub(), { enviarConfirmacao: jest.fn() });
+    expect(service.validator).toBeDefined();
+    expect(service.breaker).toBeDefined();
+  });
+
+  test('respeita opcoes customizadas quando fornecidas', () => {
+    const service = new CheckoutService(gatewayAprovaStub, novoPedidoRepositoryStub(), { enviarConfirmacao: jest.fn() }, {
+      timeoutMs: 500,
+      retryOptions: { maxRetries: 1, backoffMs: 10, jitter: 0 },
+    });
+    expect(service.timeoutMs).toBe(500);
+    expect(service.retryOptions.maxRetries).toBe(1);
+  });
 });
 
 describe('CheckoutService — Fluxo 5: Validacao de Entrada (RN01)', () => {

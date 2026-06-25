@@ -75,6 +75,46 @@ describe('retry (RN05/RN06)', () => {
     expect(sleeps).toContain(500);
     global.setTimeout.mockRestore();
   });
+
+  test('SOMA o jitter ao backoff (direcao correta do operador)', async () => {
+    // random()=1 e jitter=0.2 => spread = 500*0.2*1 = 100. Espera = 600, nao 400.
+    const sleeps = [];
+    const realSetTimeout = global.setTimeout;
+    jest.spyOn(global, 'setTimeout').mockImplementation((fn, ms) => {
+      sleeps.push(ms);
+      return realSetTimeout(fn, 0);
+    });
+    const op = jest.fn()
+      .mockRejectedValueOnce(new InfrastructureError('down'))
+      .mockResolvedValue('ok');
+
+    await retry(op, { maxRetries: 3, backoffMs: 500, jitter: 0.2, random: () => 1 });
+    expect(sleeps).toContain(600); // 500 + 100 (se fosse subtracao, seria 400)
+    global.setTimeout.mockRestore();
+  });
+
+  test('reexecuta exatamente maxRetries vezes (nem mais, nem menos)', async () => {
+    const op = jest.fn().mockRejectedValue(new InfrastructureError('down'));
+    await expect(retry(op, { maxRetries: 2, backoffMs: 1, jitter: 0, random: () => 0 }))
+      .rejects.toThrow(InfrastructureError);
+    expect(op).toHaveBeenCalledTimes(3); // 1 inicial + 2 retries
+  });
+
+  test('maxRetries=0 executa a operacao UMA unica vez (limite < vs <=)', async () => {
+    // Com '<=' no lugar de '<', attempt(0) <= maxRetries(0) seria verdadeiro
+    // e haveria 1 retry indevido (2 chamadas). Este teste fixa o limite.
+    const op = jest.fn().mockRejectedValue(new InfrastructureError('down'));
+    await expect(retry(op, { maxRetries: 0, backoffMs: 1, jitter: 0, random: () => 0 }))
+      .rejects.toThrow(InfrastructureError);
+    expect(op).toHaveBeenCalledTimes(1);
+  });
+
+  test('NAO reexecuta InfrastructureError marcado como nao-retryable', async () => {
+    const naoRetryable = new InfrastructureError('aberto', { retryable: false });
+    const op = jest.fn().mockRejectedValue(naoRetryable);
+    await expect(retry(op, opts)).rejects.toThrow(InfrastructureError);
+    expect(op).toHaveBeenCalledTimes(1); // ambas as condicoes do && importam
+  });
 });
 
 describe('CircuitBreaker (RN07)', () => {

@@ -5,7 +5,7 @@ module.exports = {
   packageManager: 'npm',
   testRunner: 'jest',
   jest: { projectType: 'custom', configFile: 'package.json' },
-  reporters: ['html', 'clear-text', 'progress'],
+  reporters: ['html', 'json', 'clear-text', 'progress'],
   coverageAnalysis: 'perTest',
   mutate: [
     'src/services/**/*.js',

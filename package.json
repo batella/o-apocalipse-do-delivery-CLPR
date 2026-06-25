@@ -25,7 +25,8 @@
   "author": "Grupo CLPR - PUC Minas",
   "license": "MIT",
   "dependencies": {
-    "express": "^4.19.2"
+    "express": "^4.19.2",
+    "docx": "^8.5.0"
   },
   "devDependencies": {
     "@stryker-mutator/core": "^8.2.6",
