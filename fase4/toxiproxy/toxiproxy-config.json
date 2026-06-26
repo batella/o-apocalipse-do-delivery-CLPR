@@ -1,0 +1,7 @@
+{
+  "name": "checkout-gateway",
+  "listen": "127.0.0.1:8666",
+  "upstream": "127.0.0.1:3000",
+  "enabled": false,
+  "description": "Configuração de exemplo para utilização futura do Toxiproxy."
+}
