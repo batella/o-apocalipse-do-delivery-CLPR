@@ -9,9 +9,19 @@ const app = express();
 app.use(express.json());
 
 // Mocks de infraestrutura para rodar localmente antes do Toxiproxy (Fase 4).
+// O gateway chama a porta 8666 (Toxiproxy) → 9000 (mockGatewayServer).
+// Assim a latência injetada pelo Toxiproxy afeta de verdade o processamento.
+const GATEWAY_URL = process.env.GATEWAY_URL || 'http://localhost:8666';
+
 const gatewayPagamentoMock = {
-  cobrar: async () => new Promise((resolve) =>
-    setTimeout(() => resolve({ status: GatewayStatus.APPROVED }), 300)),
+  cobrar: async (valor, cartao) => {
+    const res = await fetch(`${GATEWAY_URL}/cobrar`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ valor, cartao }),
+    });
+    return res.json();
+  },
 };
 
 const pedidoRepositoryMock = {
